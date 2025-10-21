@@ -1,33 +1,53 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="UTF-8">
-  <title>Danh sách hội viên</title>
-  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-  <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Danh Sách Lớp Võ</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <h2>Chọn hội viên để xuất danh sách</h2>
-  <input type="text" id="exam_code" placeholder="Nhập mã kỳ thi (VD: T0125)" />
+    <h2>Danh Sách Tạo Bởi Nhân Hoàng</h2>
 
-  <table border="1" cellpadding="5">
-    <thead>
-      <tr>
-        <th>Chọn</th><th>Tên</th><th>Mã hội viên</th><th>Quyền</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for m in members %}
-      <tr>
-        <td><input type="checkbox" value="{{ m['Mã hội viên'] }}"></td>
-        <td>{{ m['Tên'] }}</td>
-        <td>{{ m['Mã hội viên'] }}</td>
-        <td>{{ m['Quyền'] }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+    <input type="text" id="searchInput" placeholder="Nhập tên hoặc mã hội viên ...">
 
-  <button onclick="exportFile()">Xuất file Excel</button>
+    <label for="roleFilter">Quyền:</label>
+    <select id="roleFilter">
+        <option value="">Tất cả</option>
+        <option value="Cấp 10">Cấp 10</option>
+        <option value="Cấp 9">Cấp 9</option>
+        <option value="Cấp 8">Cấp 8</option>
+        <option value="Cấp 7">Cấp 7</option>
+        <option value="Cấp 6">Cấp 6</option>
+        <option value="Cấp 5">Cấp 5</option>
+        <option value="Cấp 4">Cấp 4</option>
+        <option value="Cấp 3">Cấp 3</option>
+        <option value="Cấp 2">Cấp 2</option>
+        <option value="Cấp 1">Cấp 1</option>
+        <option value="1 Đẳng">1 Đẳng</option>
+        <option value="2 Đẳng">2 Đẳng</option>
+        <option value="3 Đẳng">3 Đẳng</option>
+        <option value="GV">GV</option>
+    </select>
+
+    <button id="exportBtn">Xuất Excel</button>
+
+    <div class="info-bar">
+        <span id="totalCount">Hiện có: 0 học viên</span>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Chọn</th>
+                <th>Họ và Tên</th>
+                <th>Mã Hội Viên</th>
+                <th>Quyền</th>
+            </tr>
+        </thead>
+        <tbody id="memberTable"></tbody>
+    </table>
+
+    <script src="script.js"></script>
 </body>
 </html>
