@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Danh Sách Lớp Võ</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <h2>Danh Sách Tạo Bởi Nhân Hoàng</h2>
@@ -30,6 +30,7 @@
         <option value="GV">GV</option>
     </select>
 
+    <input type="text" id="examCode" placeholder="Nhập mã kỳ thi (ví dụ: T12_2025)">
     <button id="exportBtn">Xuất Excel</button>
 
     <div class="info-bar">
@@ -48,6 +49,6 @@
         <tbody id="memberTable"></tbody>
     </table>
 
-    <script src="script.js"></script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>
