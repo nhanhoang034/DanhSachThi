@@ -28,17 +28,23 @@ def export():
     df = pd.read_csv(DATA_FILE)
     df_sel = df[df['Mã hội viên'].isin(selected)].copy()
     
+    # Xếp theo thứ tự người dùng đã chọn
     df_sel['order'] = df_sel['Mã hội viên'].apply(lambda x: selected.index(x))
     df_sel = df_sel.sort_values('order')
     
+    # SỬA LẠI THỨ TỰ CỘT - QUAN TRỌNG!
     out_df = pd.DataFrame({
         'STT': range(1, len(df_sel) + 1),
         'Mã kỳ thi': [exam_code] * len(df_sel),
         'Mã đơn vị': ['TNIN'] * len(df_sel),
         'Mã CLB': ['CLB_01102'] * len(df_sel),
-        'Mã hội viên': df_sel['Mã hội viên'],
-        'Cấp đẳng đăng ký dự thi': df_sel['Quyền'].apply(lambda q: int(q.split()[-1]) - 1 if str(q).startswith('Cấp') else ''),
-        'Cấp hiện tại': df_sel['Quyền']
+        'Mã hội viên': df_sel['Mã hội viên'].values,
+        'Họ và tên': df_sel['Tên'].values,  # THÊM CỘT NÀY
+        'Cấp hiện tại': df_sel['Quyền'].values,
+        'Cấp đẳng đăng ký dự thi': df_sel['Quyền'].apply(
+            lambda q: int(str(q).replace('Cấp', '').strip()) - 1 
+            if str(q).startswith('Cấp') else q
+        ).values
     })
     
     output = BytesIO()
@@ -47,7 +53,8 @@ def export():
     output.seek(0)
     
     filename = f"DST_{exam_code}_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
-    return send_file(output, as_attachment=True, download_name=filename)
+    return send_file(output, as_attachment=True, download_name=filename,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
