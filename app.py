@@ -1,8 +1,6 @@
 from flask import Flask, render_template, request, send_file, jsonify
 import pandas as pd
-from openpyxl import Workbook
-from openpyxl.styles import Font, Alignment, Border, Side
-from io import BytesIO
+from io import BytesIO, StringIO
 import datetime
 import os
 
@@ -50,68 +48,34 @@ def export():
                 else:
                     cap_dang_ky = quyen
                 
-                result_data.append([
-                    idx,
-                    exam_code,
-                    'TNIN',
-                    'CLB_01102',
-                    code,
-                    cap_dang_ky
-                ])
+                result_data.append({
+                    'STT': idx,
+                    'Mã kỳ thi': exam_code,
+                    'Mã Đơn vị': 'TNIN',
+                    'Mã CLB': 'CLB_01102',
+                    'Mã hội viên': code,
+                    'Cấp đăng ký dự thi': cap_dang_ky
+                })
         
         if not result_data:
             return jsonify({'error': 'Không tìm thấy học viên'}), 400
         
-        # Tạo workbook thủ công
-        wb = Workbook()
-        ws = wb.active
-        ws.title = 'DST'
+        # Tạo DataFrame
+        df_export = pd.DataFrame(result_data)
         
-        # Độ rộng cột
-        ws.column_dimensions['A'].width = 8
-        ws.column_dimensions['B'].width = 18
-        ws.column_dimensions['C'].width = 15
-        ws.column_dimensions['D'].width = 15
-        ws.column_dimensions['E'].width = 20
-        ws.column_dimensions['F'].width = 28
+        # Xuất CSV với UTF-8 BOM (để Excel mở đúng tiếng Việt)
+        output = StringIO()
+        df_export.to_csv(output, index=False, encoding='utf-8-sig')
         
-        # Border
-        thin = Side(style='thin')
-        border = Border(left=thin, right=thin, top=thin, bottom=thin)
+        # Convert sang bytes
+        csv_bytes = BytesIO(output.getvalue().encode('utf-8-sig'))
+        csv_bytes.seek(0)
         
-        # Tiêu đề (A1:F2)
-        ws.merge_cells('A1:F2')
-        ws['A1'] = 'DANH SACH DANG KY THAM DU THI THANG CAP DAI TAEKWONDO CLB_01102'
-        ws['A1'].font = Font(size=14, bold=True)
-        ws['A1'].alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-        
-        # Header (row 3)
-        headers = ['STT', 'Ma ky thi', 'Ma Don vi', 'Ma CLB', 'Ma hoi vien', 'Cap dang ky du thi']
-        for col, header in enumerate(headers, 1):
-            cell = ws.cell(row=3, column=col)
-            cell.value = header
-            cell.font = Font(size=11, bold=True)
-            cell.alignment = Alignment(horizontal='center', vertical='center')
-            cell.border = border
-        
-        # Data (row 4+)
-        for row_idx, row_data in enumerate(result_data, 4):
-            for col_idx, value in enumerate(row_data, 1):
-                cell = ws.cell(row=row_idx, column=col_idx)
-                cell.value = value
-                cell.alignment = Alignment(horizontal='center', vertical='center')
-                cell.border = border
-        
-        # Lưu
-        output = BytesIO()
-        wb.save(output)
-        output.seek(0)
-        
-        filename = f"DST_{exam_code}.xlsx"
+        filename = f"DST_{exam_code}.csv"
         
         return send_file(
-            output,
-            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            csv_bytes,
+            mimetype='text/csv',
             as_attachment=True,
             download_name=filename
         )
