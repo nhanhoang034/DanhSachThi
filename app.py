@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, send_file, jsonify
 import pandas as pd
-import openpyxl
-from openpyxl import load_workbook
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment, Border, Side
 from io import BytesIO
 import datetime
 import os
@@ -10,7 +10,6 @@ app = Flask(__name__)
 
 # Đọc data
 DATA_FILE = os.path.join('static', 'data.csv')
-TEMPLATE_FILE = os.path.join('static', 'template_form.xlsx')
 
 @app.route('/')
 def index():
@@ -40,8 +39,6 @@ def export():
     if not df_sel_list:
         return jsonify({'error': 'Không tìm thấy học viên'}), 400
     
-    df_sel = pd.DataFrame(df_sel_list)
-    
     # Tính cấp đăng ký dự thi
     def calculate_cap_dang_ky(quyen):
         quyen_str = str(quyen).strip()
@@ -52,27 +49,79 @@ def export():
             except:
                 return quyen_str
         else:
-            # Giữ nguyên nếu là Đẳng hoặc GV
             return quyen_str
     
     try:
-        # Load template Excel
-        wb = load_workbook(TEMPLATE_FILE)
+        # Tạo workbook mới
+        wb = Workbook()
         ws = wb.active
+        ws.title = "DST"
         
-        # Tìm dòng bắt đầu ghi dữ liệu (sau header)
-        start_row = 4  # Dòng 4 trong Excel (index 0 = dòng 1)
+        # Thiết lập độ rộng cột
+        ws.column_dimensions['A'].width = 8
+        ws.column_dimensions['B'].width = 15
+        ws.column_dimensions['C'].width = 15
+        ws.column_dimensions['D'].width = 15
+        ws.column_dimensions['E'].width = 25
+        ws.column_dimensions['F'].width = 25
         
-        # Ghi dữ liệu vào template
-        for idx, (_, row) in enumerate(df_sel.iterrows(), start=1):
-            current_row = start_row + idx - 1
+        # Tiêu đề chính (dòng 1-2)
+        ws.merge_cells('A1:F2')
+        title_cell = ws['A1']
+        title_cell.value = f'DANH SÁCH ĐĂNG KÝ THAM DỰ THI THĂNG CẤP ĐAI TAEKWONDO CLB_01102'
+        title_cell.font = Font(name='Times New Roman', size=14, bold=True)
+        title_cell.alignment = Alignment(horizontal='center', vertical='center')
+        
+        # Header (dòng 3)
+        headers = ['STT', 'Mã kỳ thi', 'Mã Đơn vị', 'Mã CLB', 'Mã hội viên', 'Cấp đẳng đăng ký dự thi']
+        for col_num, header in enumerate(headers, 1):
+            cell = ws.cell(row=3, column=col_num)
+            cell.value = header
+            cell.font = Font(name='Times New Roman', size=11, bold=True)
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.border = Border(
+                left=Side(style='thin'),
+                right=Side(style='thin'),
+                top=Side(style='thin'),
+                bottom=Side(style='thin')
+            )
+        
+        # Ghi dữ liệu (từ dòng 4)
+        for idx, row_data in enumerate(df_sel_list, start=1):
+            current_row = 3 + idx
             
-            ws.cell(row=current_row, column=1, value=idx)  # STT
-            ws.cell(row=current_row, column=2, value=exam_code)  # Mã kỳ thi
-            ws.cell(row=current_row, column=3, value='TNIN')  # Mã đơn vị
-            ws.cell(row=current_row, column=4, value='CLB_01102')  # Mã CLB
-            ws.cell(row=current_row, column=5, value=row['Mã hội viên'])  # Mã hội viên
-            ws.cell(row=current_row, column=6, value=calculate_cap_dang_ky(row['Quyền']))  # Cấp đăng ký dự thi
+            # STT
+            cell = ws.cell(row=current_row, column=1, value=idx)
+            cell.alignment = Alignment(horizontal='center')
+            
+            # Mã kỳ thi
+            cell = ws.cell(row=current_row, column=2, value=exam_code)
+            cell.alignment = Alignment(horizontal='center')
+            
+            # Mã đơn vị
+            cell = ws.cell(row=current_row, column=3, value='TNIN')
+            cell.alignment = Alignment(horizontal='center')
+            
+            # Mã CLB
+            cell = ws.cell(row=current_row, column=4, value='CLB_01102')
+            cell.alignment = Alignment(horizontal='center')
+            
+            # Mã hội viên
+            cell = ws.cell(row=current_row, column=5, value=row_data['Mã hội viên'])
+            cell.alignment = Alignment(horizontal='center')
+            
+            # Cấp đăng ký dự thi
+            cell = ws.cell(row=current_row, column=6, value=calculate_cap_dang_ky(row_data['Quyền']))
+            cell.alignment = Alignment(horizontal='center')
+            
+            # Border cho tất cả các ô
+            for col in range(1, 7):
+                ws.cell(row=current_row, column=col).border = Border(
+                    left=Side(style='thin'),
+                    right=Side(style='thin'),
+                    top=Side(style='thin'),
+                    bottom=Side(style='thin')
+                )
         
         # Lưu vào BytesIO
         output = BytesIO()
@@ -81,6 +130,8 @@ def export():
         
     except Exception as e:
         app.logger.error(f"Lỗi tạo Excel: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': f'Lỗi tạo file Excel: {str(e)}'}), 500
     
     filename = f"DST_{exam_code}_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
