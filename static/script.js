@@ -33,6 +33,23 @@ document.addEventListener("DOMContentLoaded", function () {
 
         filteredData.forEach((row, index) => {
             const tr = document.createElement("tr");
+            
+            // Tên
+            const nameCell = document.createElement("td");
+            nameCell.textContent = row[0];
+            tr.appendChild(nameCell);
+
+            // Mã hội viên
+            const codeCell = document.createElement("td");
+            codeCell.textContent = row[1];
+            tr.appendChild(codeCell);
+
+            // Quyền
+            const roleCell = document.createElement("td");
+            roleCell.textContent = row[2];
+            tr.appendChild(roleCell);
+
+            // Checkbox - đặt cuối cùng
             const checkboxCell = document.createElement("td");
             const checkbox = document.createElement("input");
             checkbox.type = "checkbox";
@@ -40,18 +57,6 @@ document.addEventListener("DOMContentLoaded", function () {
             checkbox.dataset.index = index;
             checkboxCell.appendChild(checkbox);
             tr.appendChild(checkboxCell);
-
-            const nameCell = document.createElement("td");
-            nameCell.textContent = row[0];
-            tr.appendChild(nameCell);
-
-            const codeCell = document.createElement("td");
-            codeCell.textContent = row[1];
-            tr.appendChild(codeCell);
-
-            const roleCell = document.createElement("td");
-            roleCell.textContent = row[2];
-            tr.appendChild(roleCell);
 
             tableBody.appendChild(tr);
         });
@@ -76,7 +81,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const selected = [];
         document.querySelectorAll(".selectMember:checked").forEach(cb => {
             const row = data[cb.dataset.index];
-            selected.push({ name: row[0], code: row[1], role: row[2] });
+            selected.push(row[1]); // Chỉ gửi mã hội viên
         });
 
         if (selected.length === 0) return alert("Chưa chọn hội viên nào!");
@@ -85,7 +90,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const response = await fetch("/export", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ members: selected, exam_code: examCode })
+            body: JSON.stringify({ selected: selected, exam_code: examCode })
         });
 
         const blob = await response.blob();
