@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Danh sách hội viên</title>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</head>
+<body>
+  <h2>Chọn hội viên để xuất danh sách</h2>
+  <input type="text" id="exam_code" placeholder="Nhập mã kỳ thi (VD: T0125)" />
+
+  <table border="1" cellpadding="5">
+    <thead>
+      <tr>
+        <th>Chọn</th><th>Tên</th><th>Mã hội viên</th><th>Quyền</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in members %}
+      <tr>
+        <td><input type="checkbox" value="{{ m['Mã hội viên'] }}"></td>
+        <td>{{ m['Tên'] }}</td>
+        <td>{{ m['Mã hội viên'] }}</td>
+        <td>{{ m['Quyền'] }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <button onclick="exportFile()">Xuất file Excel</button>
+</body>
+</html>
