@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, send_file, jsonify
 import pandas as pd
-from io import BytesIO, StringIO
+from io import BytesIO
 import datetime
 import os
 
@@ -70,7 +70,6 @@ def export():
                     cap_dang_ky = quyen
                 
                 result_data.append({
-                    'STT': idx,
                     'Mã kỳ thi': exam_code,
                     'Mã Đơn vị': 'TNIN',
                     'Mã CLB': 'CLB_01102',
@@ -90,33 +89,85 @@ def export():
         # Tạo DataFrame
         df_export = pd.DataFrame(result_data)
         
-        # Xuất CSV với UTF-8 BOM (để Excel mở đúng tiếng Việt)
-        csv_string = df_export.to_csv(index=False, encoding='utf-8-sig')
-        
-        # Convert sang bytes
-        output = BytesIO()
-        output.write(csv_string.encode('utf-8-sig'))
-        output.seek(0)
-        
-        filename = f"DST_{exam_code}.csv"
-        
         # LOG để debug
         app.logger.info(f"===== XUẤT FILE =====")
-        app.logger.info(f"Filename: {filename}")
-        app.logger.info(f"Mimetype: text/csv")
         app.logger.info(f"Số học viên: {len(result_data)}")
         
-        # Force CSV download
-        response = send_file(
+        # Xuất Excel với XlsxWriter engine
+        output = BytesIO()
+        
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            # Ghi DataFrame từ dòng 3 (để dành chỗ cho title)
+            df_export.to_excel(writer, sheet_name='DST', index=False, startrow=2, header=False)
+            
+            # Lấy workbook và worksheet
+            workbook = writer.book
+            worksheet = writer.sheets['DST']
+            
+            # Format cho title
+            title_format = workbook.add_format({
+                'bold': True,
+                'font_size': 14,
+                'align': 'center',
+                'valign': 'vcenter',
+                'font_name': 'Times New Roman'
+            })
+            
+            # Format cho header
+            header_format = workbook.add_format({
+                'bold': True,
+                'font_size': 11,
+                'align': 'center',
+                'valign': 'vcenter',
+                'border': 1,
+                'font_name': 'Times New Roman'
+            })
+            
+            # Format cho data
+            data_format = workbook.add_format({
+                'align': 'center',
+                'valign': 'vcenter',
+                'border': 1,
+                'font_name': 'Times New Roman'
+            })
+            
+            # Merge cells cho title (A1:E2) - 5 cột không có STT
+            worksheet.merge_range('A1:E2', 
+                'DANH SÁCH ĐĂNG KÝ THAM DỰ THI THĂNG CẤP ĐAI TAEKWONDO CLB_01102', 
+                title_format)
+            
+            # Set độ rộng cột
+            worksheet.set_column('A:A', 18)  # Mã kỳ thi
+            worksheet.set_column('B:B', 15)  # Mã Đơn vị
+            worksheet.set_column('C:C', 15)  # Mã CLB
+            worksheet.set_column('D:D', 25)  # Mã hội viên
+            worksheet.set_column('E:E', 28)  # Cấp đăng ký dự thi
+            
+            # Ghi header (row 3)
+            headers = ['Mã kỳ thi', 'Mã Đơn vị', 'Mã CLB', 'Mã hội viên', 'Cấp đăng ký dự thi']
+            for col_num, value in enumerate(headers):
+                worksheet.write(2, col_num, value, header_format)
+            
+            # Apply format cho data cells (từ row 4)
+            for row_num in range(len(df_export)):
+                for col_num in range(len(df_export.columns)):
+                    worksheet.write(row_num + 3, col_num, 
+                                  df_export.iloc[row_num, col_num], 
+                                  data_format)
+        
+        output.seek(0)
+        
+        filename = f"DST_{exam_code}.xlsx"
+        
+        app.logger.info(f"Filename: {filename}")
+        app.logger.info(f"File size: {len(output.getvalue())} bytes")
+        
+        return send_file(
             output,
-            mimetype='text/csv',
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             as_attachment=True,
             download_name=filename
         )
-        response.headers['Content-Type'] = 'text/csv; charset=utf-8'
-        response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
-        
-        return response
         
     except Exception as e:
         app.logger.error(f"Lỗi: {e}")
