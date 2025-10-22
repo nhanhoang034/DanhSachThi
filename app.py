@@ -34,11 +34,25 @@ def export():
             return jsonify({'error': 'Thiếu dữ liệu'}), 400
         
         # Đọc CSV
-        df = pd.read_csv(DATA_FILE, header=None, names=['Tên', 'Mã hội viên', 'Quyền'], encoding='utf-8')
+        df = pd.read_csv(DATA_FILE, header=None, encoding='utf-8')
         
-        # DEBUG: In ra 5 dòng đầu
-        app.logger.info(f"===== CSV DATA (5 dòng đầu) =====")
-        for idx, row in df.head().iterrows():
+        # DEBUG: In ra thông tin CSV
+        app.logger.info(f"===== CSV INFO =====")
+        app.logger.info(f"Số cột: {len(df.columns)}")
+        app.logger.info(f"Tên cột: {df.columns.tolist()}")
+        app.logger.info(f"===== CSV DATA (3 dòng đầu RAW) =====")
+        for idx in range(min(3, len(df))):
+            app.logger.info(f"Row {idx}: {df.iloc[idx].tolist()}")
+        
+        # Gán tên cột (giả định: cột 0=Tên, cột 1=Mã, cột 2=Quyền)
+        if len(df.columns) >= 3:
+            df.columns = ['Tên', 'Mã hội viên', 'Quyền'] + [f'Extra_{i}' for i in range(len(df.columns) - 3)]
+        else:
+            app.logger.error(f"CSV không đủ 3 cột! Chỉ có {len(df.columns)} cột")
+            return jsonify({'error': 'File CSV không đúng định dạng'}), 400
+        
+        app.logger.info(f"===== CSV DATA (sau khi gán tên cột) =====")
+        for idx, row in df.head(3).iterrows():
             app.logger.info(f"Row {idx}: Tên='{row['Tên']}' | Mã='{row['Mã hội viên']}' | Quyền='{row['Quyền']}'")
         
         # Chuẩn bị dữ liệu - NORMALIZE mã hội viên
