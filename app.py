@@ -27,15 +27,7 @@ def get_cap_sort_key(quyen):
     if quyen_str.startswith('Cấp'):
         try:
             cap_num = int(quyen_str.replace('Cấp', '').strip())
-            return (0, -cap_num)  # Group 0, sắp xếp giảm dần (9->1)
-        except:
-            pass
-    
-    # Xử lý "X Đẳng"
-    if 'Đẳng' in quyen_str:
-        try:
-            dang_num = int(quyen_str.replace('Đẳng', '').strip())
-            return (1, dang_num)  # Group 1, sắp xếp tăng dần (1->3)
+            return (1, -cap_num)  # Group 0, sắp xếp giảm dần (9->1)
         except:
             pass
     
@@ -159,12 +151,12 @@ def export():
                 title_format)
             
             # Set độ rộng cột (điều chỉnh cho vừa A4 NGANG)
-            worksheet.set_column('A:A', 6)   # STT - nhỏ
-            worksheet.set_column('B:B', 10)  # Mã kỳ thi - nhỏ
-            worksheet.set_column('C:C', 10)  # Mã Đơn vị - nhỏ
-            worksheet.set_column('D:D', 12)  # Mã CLB - nhỏ
-            worksheet.set_column('E:E', 22)  # Mã hội viên - quan trọng
-            worksheet.set_column('F:F', 20)  # Cấp đăng ký - quan trọng
+            worksheet.set_column('A:A', 8)   # STT - nhỏ
+            worksheet.set_column('B:B', 16)  # Mã kỳ thi - nhỏ
+            worksheet.set_column('C:C', 16)  # Mã Đơn vị - nhỏ
+            worksheet.set_column('D:D', 16)  # Mã CLB - nhỏ
+            worksheet.set_column('E:E', 33)  # Mã hội viên - quan trọng
+            worksheet.set_column('F:F', 24)  # Cấp đăng ký - quan trọng
             
             # Set chiều cao dòng
             worksheet.set_row(0, 30)  # Dòng title cao hơn
