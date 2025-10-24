@@ -25,55 +25,30 @@ def export():
         selected = data.get('selected', [])
         exam_code = data.get('exam_code', '').strip()
         
-        # DEBUG LOG
-        app.logger.info(f"===== REQUEST DATA =====")
-        app.logger.info(f"Selected: {selected}")
-        app.logger.info(f"Exam code: {exam_code}")
-        
         if not selected or not exam_code:
             return jsonify({'error': 'Thiếu dữ liệu'}), 400
         
         # Đọc CSV
         df = pd.read_csv(DATA_FILE, header=None, encoding='utf-8')
         
-        # DEBUG: In ra thông tin CSV
-        app.logger.info(f"===== CSV INFO =====")
-        app.logger.info(f"Số cột: {len(df.columns)}")
-        app.logger.info(f"Tên cột: {df.columns.tolist()}")
-        app.logger.info(f"===== CSV DATA (3 dòng đầu RAW) =====")
-        for idx in range(min(3, len(df))):
-            app.logger.info(f"Row {idx}: {df.iloc[idx].tolist()}")
-        
-        # Gán tên cột (giả định: cột 0=Tên, cột 1=Mã, cột 2=Quyền)
+        # Gán tên cột
         if len(df.columns) >= 3:
             df.columns = ['Tên', 'Mã hội viên', 'Quyền'] + [f'Extra_{i}' for i in range(len(df.columns) - 3)]
         else:
-            app.logger.error(f"CSV không đủ 3 cột! Chỉ có {len(df.columns)} cột")
             return jsonify({'error': 'File CSV không đúng định dạng'}), 400
         
-        app.logger.info(f"===== CSV DATA (sau khi gán tên cột) =====")
-        for idx, row in df.head(3).iterrows():
-            app.logger.info(f"Row {idx}: Tên='{row['Tên']}' | Mã='{row['Mã hội viên']}' | Quyền='{row['Quyền']}'")
-        
-        # Chuẩn bị dữ liệu - NORMALIZE mã hội viên
+        # Chuẩn bị dữ liệu
         df['Mã hội viên'] = df['Mã hội viên'].astype(str).str.strip()
         
         result_data = []
         for idx, code in enumerate(selected, start=1):
-            # Normalize code từ frontend
             code_normalized = str(code).strip()
-            
-            # DEBUG
-            app.logger.info(f"Tìm kiếm mã: '{code_normalized}'")
-            
-            # So sánh
             row = df[df['Mã hội viên'] == code_normalized]
             
             if not row.empty:
-                app.logger.info(f"✓ Tìm thấy: '{code_normalized}'")
                 quyen = str(row.iloc[0]['Quyền']).strip()
                 
-                # Tính cấp (chỉ số, bỏ chữ "Cấp")
+                # Tính cấp đăng ký
                 if quyen.startswith('Cấp'):
                     try:
                         cap_num = int(quyen.replace('Cấp', '').strip()) - 1
@@ -84,41 +59,31 @@ def export():
                     cap_dang_ky = quyen
                 
                 result_data.append({
+                    'STT': idx,
                     'Mã kỳ thi': exam_code,
                     'Mã Đơn vị': 'TNIN',
                     'Mã CLB': 'CLB_01102',
                     'Mã hội viên': code_normalized,
                     'Cấp đăng ký dự thi': cap_dang_ky
                 })
-            else:
-                # LOG để debug
-                app.logger.warning(f"Không tìm thấy mã: '{code_normalized}'")
         
         if not result_data:
-            # LOG danh sách mã có trong CSV
-            app.logger.error(f"Danh sách mã trong CSV: {df['Mã hội viên'].tolist()}")
-            app.logger.error(f"Danh sách mã được chọn: {selected}")
             return jsonify({'error': 'Không tìm thấy học viên'}), 400
         
         # Tạo DataFrame
         df_export = pd.DataFrame(result_data)
         
-        # LOG để debug
-        app.logger.info(f"===== XUẤT FILE =====")
-        app.logger.info(f"Số học viên: {len(result_data)}")
-        
-        # Xuất Excel với XlsxWriter engine
+        # Xuất Excel với XlsxWriter
         output = BytesIO()
         
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            # Ghi DataFrame từ dòng 3 (để dành chỗ cho title)
-            df_export.to_excel(writer, sheet_name='DST', index=False, startrow=2, header=False)
+            # Ghi DataFrame từ dòng 4 (để dành chỗ cho title và header)
+            df_export.to_excel(writer, sheet_name='Sheet1', index=False, startrow=3, header=False)
             
-            # Lấy workbook và worksheet
             workbook = writer.book
-            worksheet = writer.sheets['DST']
+            worksheet = writer.sheets['Sheet1']
             
-            # Format cho title
+            # Format cho tiêu đề (merge A1:F2)
             title_format = workbook.add_format({
                 'bold': True,
                 'font_size': 14,
@@ -134,7 +99,8 @@ def export():
                 'align': 'center',
                 'valign': 'vcenter',
                 'border': 1,
-                'font_name': 'Times New Roman'
+                'font_name': 'Times New Roman',
+                'text_wrap': True
             })
             
             # Format cho data
@@ -145,24 +111,25 @@ def export():
                 'font_name': 'Times New Roman'
             })
             
-            # Merge cells cho title (A1:E2) - 5 cột không có STT
-            worksheet.merge_range('A1:E2', 
+            # Merge cells cho title (A1:F2)
+            worksheet.merge_range('A1:F2', 
                 'DANH SÁCH ĐĂNG KÝ THAM DỰ THI THĂNG CẤP ĐAI TAEKWONDO CLB_01102', 
                 title_format)
             
             # Set độ rộng cột
-            worksheet.set_column('A:A', 18)  # Mã kỳ thi
-            worksheet.set_column('B:B', 15)  # Mã Đơn vị
-            worksheet.set_column('C:C', 15)  # Mã CLB
-            worksheet.set_column('D:D', 25)  # Mã hội viên
-            worksheet.set_column('E:E', 28)  # Cấp đăng ký dự thi
+            worksheet.set_column('A:A', 8)   # STT
+            worksheet.set_column('B:B', 15)  # Mã kỳ thi
+            worksheet.set_column('C:C', 15)  # Mã Đơn vị
+            worksheet.set_column('D:D', 15)  # Mã CLB
+            worksheet.set_column('E:E', 25)  # Mã hội viên
+            worksheet.set_column('F:F', 28)  # Cấp đăng ký dự thi
             
-            # Ghi header (row 3)
-            headers = ['Mã kỳ thi', 'Mã Đơn vị', 'Mã CLB', 'Mã hội viên', 'Cấp đăng ký dự thi']
+            # Ghi header (row 3, index 2)
+            headers = ['STT', 'Mã kỳ thi', 'Mã Đơn vị', 'Mã CLB', 'Mã hội viên', 'Cấp đăng ký dự thi']
             for col_num, value in enumerate(headers):
                 worksheet.write(2, col_num, value, header_format)
             
-            # Apply format cho data cells (từ row 4)
+            # Apply format cho data cells (từ row 4, index 3)
             for row_num in range(len(df_export)):
                 for col_num in range(len(df_export.columns)):
                     worksheet.write(row_num + 3, col_num, 
@@ -172,9 +139,6 @@ def export():
         output.seek(0)
         
         filename = f"DST_{exam_code}.xlsx"
-        
-        app.logger.info(f"Filename: {filename}")
-        app.logger.info(f"File size: {len(output.getvalue())} bytes")
         
         return send_file(
             output,
