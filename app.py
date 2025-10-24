@@ -3,6 +3,7 @@ import pandas as pd
 from io import BytesIO
 import datetime
 import os
+import re
 
 app = Flask(__name__)
 
@@ -41,6 +42,19 @@ def get_cap_sort_key(quyen):
     # Các trường hợp khác
     return (2, 0)
 
+def convert_cap_to_number(quyen):
+    """Chuyển đổi Cấp X thành số X-1, hoặc giữ nguyên nếu không phải Cấp"""
+    quyen_str = str(quyen).strip()
+    
+    if quyen_str.startswith('Cấp'):
+        try:
+            cap_num = int(quyen_str.replace('Cấp', '').strip())
+            return cap_num - 1  # Trừ đi 1
+        except:
+            return quyen_str
+    
+    return quyen_str
+
 @app.route('/export', methods=['POST'])
 def export():
     try:
@@ -72,15 +86,8 @@ def export():
             if not row.empty:
                 quyen = str(row.iloc[0]['Quyền']).strip()
                 
-                # Tính cấp đăng ký (Cấp X -> X-1)
-                if quyen.startswith('Cấp'):
-                    try:
-                        cap_num = int(quyen.replace('Cấp', '').strip()) - 1
-                        cap_dang_ky = cap_num
-                    except:
-                        cap_dang_ky = quyen
-                else:
-                    cap_dang_ky = quyen
+                # Chuyển đổi cấp (Cấp X -> X-1)
+                cap_dang_ky = convert_cap_to_number(quyen)
                 
                 result_data.append({
                     'Quyền': quyen,  # Để sort
@@ -95,7 +102,7 @@ def export():
         if not result_data:
             return jsonify({'error': 'Không tìm thấy học viên'}), 400
         
-        # Sắp xếp: theo cấp (9->1), trong cùng cấp thì theo thứ tự chọn
+        # Sắp xếp: TRƯỚC TIÊN theo cấp (9->1), SAU ĐÓ trong cùng cấp thì theo thứ tự chọn
         result_data.sort(key=lambda x: (get_cap_sort_key(x['Quyền']), x['selection_order']))
         
         # Thêm STT sau khi đã sắp xếp
@@ -116,7 +123,7 @@ def export():
             workbook = writer.book
             worksheet = writer.sheets['Sheet1']
             
-            # Format cho tiêu đề (CHỈ merge A1:F1, không merge dòng 2)
+            # Format cho tiêu đề
             title_format = workbook.add_format({
                 'bold': True,
                 'font_size': 14,
@@ -149,7 +156,7 @@ def export():
                 'DANH SÁCH ĐĂNG KÝ THAM DỰ THI THĂNG CẤP ĐAI TAEKWONDO CLB_01102', 
                 title_format)
             
-            # Set độ rộng cột (điều chỉnh cho vừa A4)
+            # Set độ rộng cột (điều chỉnh cho vừa A4 NGANG)
             worksheet.set_column('A:A', 5)   # STT - nhỏ
             worksheet.set_column('B:B', 10)  # Mã kỳ thi - nhỏ
             worksheet.set_column('C:C', 10)  # Mã Đơn vị - nhỏ
@@ -172,15 +179,23 @@ def export():
                                   df_export.iloc[row_num, col_num], 
                                   data_format)
             
-            # Cài đặt in - VỪA 1 TRANG A4
+            # Cài đặt in - VỪA 1 TRANG A4 NGANG
             worksheet.set_paper(9)  # A4 paper
             worksheet.fit_to_pages(1, 0)  # Vừa 1 trang ngang, tự động chiều dọc
-            worksheet.set_portrait()  # In dọc
+            worksheet.set_landscape()  # IN NGANG (thay vì portrait)
             worksheet.set_margins(left=0.5, right=0.5, top=0.75, bottom=0.75)
         
         output.seek(0)
         
-        filename = f"DST_{exam_code}.xlsx"
+        # Tạo tên file theo format: "Danh sách thi quý A BCDE"
+        # Ví dụ: 2025-Q3 -> "Danh sách thi quý 3 2025"
+        match = re.match(r'(\d{4})-Q(\d)', exam_code)
+        if match:
+            year = match.group(1)  # BCDE
+            quarter = match.group(2)  # A
+            filename = f"Danh sách thi quý {quarter} {year}.xlsx"
+        else:
+            filename = f"DST_{exam_code}.xlsx"
         
         return send_file(
             output,
