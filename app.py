@@ -27,7 +27,15 @@ def get_cap_sort_key(quyen):
     if quyen_str.startswith('Cấp'):
         try:
             cap_num = int(quyen_str.replace('Cấp', '').strip())
-            return (1, -cap_num)  # Group 0, sắp xếp giảm dần (9->1)
+            return (0, -cap_num)  # Group 0, sắp xếp giảm dần (9->1)
+        except:
+            pass
+    
+    # Xử lý "X Đẳng"
+    if 'Đẳng' in quyen_str:
+        try:
+            dang_num = int(quyen_str.replace('Đẳng', '').strip())
+            return (1, dang_num)  # Group 1, sắp xếp tăng dần (1->3)
         except:
             pass
     
@@ -35,18 +43,21 @@ def get_cap_sort_key(quyen):
     return (2, 0)
 
 def convert_cap_to_number(quyen):
-    """Chuyển đổi Cấp X thành số X-1, GIỮ NGUYÊN các trường hợp khác"""
+    """Chuyển đổi 'Cấp X' thành số X-1, GIỮ NGUYÊN các trường hợp khác (GV, Đẳng)"""
     quyen_str = str(quyen).strip()
     
-    # CHỈ xử lý "Cấp X", còn lại GIỮ NGUYÊN (GV, 1 Đẳng, 2 Đẳng, ...)
-    if quyen_str.startswith('Cấp ') or (quyen_str.startswith('Cấp') and len(quyen_str) > 3):
+    # CHỈ xử lý "Cấp X" (có thể có hoặc không có khoảng trắng)
+    # Ví dụ: "Cấp 9", "Cấp9", "Cấp 10", "Cấp10" -> đều xử lý
+    if 'Cấp' in quyen_str and not ('Đẳng' in quyen_str or quyen_str == 'GV'):
         try:
+            # Loại bỏ chữ "Cấp" và khoảng trắng, lấy số
             cap_num = int(quyen_str.replace('Cấp', '').strip())
             return cap_num - 1  # Trừ đi 1
-        except:
+        except ValueError:
+            # Nếu không parse được số, giữ nguyên
             return quyen_str
     
-    # GV, Đẳng, ... giữ nguyên
+    # GV, 1 Đẳng, 2 Đẳng, 3 Đẳng... giữ nguyên
     return quyen_str
 
 @app.route('/export', methods=['POST'])
@@ -120,7 +131,7 @@ def export():
             # Format cho tiêu đề
             title_format = workbook.add_format({
                 'bold': True,
-                'font_size': 12,
+                'font_size': 14,
                 'align': 'center',
                 'valign': 'vcenter',
                 'font_name': 'Times New Roman'
@@ -129,7 +140,7 @@ def export():
             # Format cho header
             header_format = workbook.add_format({
                 'bold': True,
-                'font_size': 12,
+                'font_size': 11,
                 'align': 'center',
                 'valign': 'vcenter',
                 'border': 1,
@@ -150,13 +161,14 @@ def export():
                 'DANH SÁCH ĐĂNG KÝ THAM DỰ THI THĂNG CẤP ĐAI TAEKWONDO CLB_01102', 
                 title_format)
             
-            # Set độ rộng cột (điều chỉnh cho vừa A4 NGANG)
-            worksheet.set_column('A:A', 8)   # STT - nhỏ
-            worksheet.set_column('B:B', 16)  # Mã kỳ thi - nhỏ
-            worksheet.set_column('C:C', 16)  # Mã Đơn vị - nhỏ
-            worksheet.set_column('D:D', 16)  # Mã CLB - nhỏ
-            worksheet.set_column('E:E', 33)  # Mã hội viên - quan trọng
-            worksheet.set_column('F:F', 24)  # Cấp đăng ký - quan trọng
+            # Set độ rộng cột (tự động căn chỉnh cho A4 NGANG)
+            # Ưu tiên: Mã HV > Cấp đăng ký > Các Mã > STT
+            worksheet.set_column('A:A', 6)    # STT - nhỏ nhất
+            worksheet.set_column('B:B', 12)   # Mã kỳ thi
+            worksheet.set_column('C:C', 12)   # Mã Đơn vị
+            worksheet.set_column('D:D', 13)   # Mã CLB
+            worksheet.set_column('E:E', 28)   # Mã hội viên - QUAN TRỌNG NHẤT
+            worksheet.set_column('F:F', 25)   # Cấp đăng ký - QUAN TRỌNG THỨ 2
             
             # Set chiều cao dòng
             worksheet.set_row(0, 30)  # Dòng title cao hơn
