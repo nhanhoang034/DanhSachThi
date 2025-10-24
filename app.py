@@ -43,16 +43,18 @@ def get_cap_sort_key(quyen):
     return (2, 0)
 
 def convert_cap_to_number(quyen):
-    """Chuyển đổi Cấp X thành số X-1, hoặc giữ nguyên nếu không phải Cấp"""
+    """Chuyển đổi Cấp X thành số X-1, GIỮ NGUYÊN các trường hợp khác"""
     quyen_str = str(quyen).strip()
     
-    if quyen_str.startswith('Cấp'):
+    # CHỈ xử lý "Cấp X", còn lại GIỮ NGUYÊN (GV, 1 Đẳng, 2 Đẳng, ...)
+    if quyen_str.startswith('Cấp ') or (quyen_str.startswith('Cấp') and len(quyen_str) > 3):
         try:
             cap_num = int(quyen_str.replace('Cấp', '').strip())
             return cap_num - 1  # Trừ đi 1
         except:
             return quyen_str
     
+    # GV, Đẳng, ... giữ nguyên
     return quyen_str
 
 @app.route('/export', methods=['POST'])
@@ -126,7 +128,7 @@ def export():
             # Format cho tiêu đề
             title_format = workbook.add_format({
                 'bold': True,
-                'font_size': 14,
+                'font_size': 12,
                 'align': 'center',
                 'valign': 'vcenter',
                 'font_name': 'Times New Roman'
@@ -135,7 +137,7 @@ def export():
             # Format cho header
             header_format = workbook.add_format({
                 'bold': True,
-                'font_size': 11,
+                'font_size': 12,
                 'align': 'center',
                 'valign': 'vcenter',
                 'border': 1,
@@ -157,7 +159,7 @@ def export():
                 title_format)
             
             # Set độ rộng cột (điều chỉnh cho vừa A4 NGANG)
-            worksheet.set_column('A:A', 5)   # STT - nhỏ
+            worksheet.set_column('A:A', 6)   # STT - nhỏ
             worksheet.set_column('B:B', 10)  # Mã kỳ thi - nhỏ
             worksheet.set_column('C:C', 10)  # Mã Đơn vị - nhỏ
             worksheet.set_column('D:D', 12)  # Mã CLB - nhỏ
