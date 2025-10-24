@@ -18,6 +18,29 @@ def index():
         app.logger.error(f"Lỗi: {e}")
         return render_template('index.html', members=[])
 
+def get_cap_sort_key(quyen):
+    """Trả về key để sắp xếp theo cấp (9->1, sau đó các Đẳng, cuối cùng là khác)"""
+    quyen_str = str(quyen).strip()
+    
+    # Xử lý "Cấp X"
+    if quyen_str.startswith('Cấp'):
+        try:
+            cap_num = int(quyen_str.replace('Cấp', '').strip())
+            return (0, -cap_num)  # Group 0, sắp xếp giảm dần (9->1)
+        except:
+            pass
+    
+    # Xử lý "X Đẳng"
+    if 'Đẳng' in quyen_str:
+        try:
+            dang_num = int(quyen_str.replace('Đẳng', '').strip())
+            return (1, dang_num)  # Group 1, sắp xếp tăng dần (1->3)
+        except:
+            pass
+    
+    # Các trường hợp khác
+    return (2, 0)
+
 @app.route('/export', methods=['POST'])
 def export():
     try:
@@ -40,15 +63,16 @@ def export():
         # Chuẩn bị dữ liệu
         df['Mã hội viên'] = df['Mã hội viên'].astype(str).str.strip()
         
+        # Tạo dict để lưu thông tin học viên và thứ tự chọn
         result_data = []
-        for idx, code in enumerate(selected, start=1):
+        for selection_order, code in enumerate(selected):
             code_normalized = str(code).strip()
             row = df[df['Mã hội viên'] == code_normalized]
             
             if not row.empty:
                 quyen = str(row.iloc[0]['Quyền']).strip()
                 
-                # Tính cấp đăng ký
+                # Tính cấp đăng ký (Cấp X -> X-1)
                 if quyen.startswith('Cấp'):
                     try:
                         cap_num = int(quyen.replace('Cấp', '').strip()) - 1
@@ -59,7 +83,8 @@ def export():
                     cap_dang_ky = quyen
                 
                 result_data.append({
-                    'STT': idx,
+                    'Quyền': quyen,  # Để sort
+                    'selection_order': selection_order,  # Thứ tự chọn
                     'Mã kỳ thi': exam_code,
                     'Mã Đơn vị': 'TNIN',
                     'Mã CLB': 'CLB_01102',
@@ -70,20 +95,28 @@ def export():
         if not result_data:
             return jsonify({'error': 'Không tìm thấy học viên'}), 400
         
-        # Tạo DataFrame
+        # Sắp xếp: theo cấp (9->1), trong cùng cấp thì theo thứ tự chọn
+        result_data.sort(key=lambda x: (get_cap_sort_key(x['Quyền']), x['selection_order']))
+        
+        # Thêm STT sau khi đã sắp xếp
+        for idx, item in enumerate(result_data, start=1):
+            item['STT'] = idx
+        
+        # Tạo DataFrame với thứ tự cột đúng
         df_export = pd.DataFrame(result_data)
+        df_export = df_export[['STT', 'Mã kỳ thi', 'Mã Đơn vị', 'Mã CLB', 'Mã hội viên', 'Cấp đăng ký dự thi']]
         
         # Xuất Excel với XlsxWriter
         output = BytesIO()
         
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            # Ghi DataFrame từ dòng 4 (để dành chỗ cho title và header)
-            df_export.to_excel(writer, sheet_name='Sheet1', index=False, startrow=3, header=False)
+            # Ghi DataFrame từ dòng 3 (dòng 1: title, dòng 2: trống, dòng 3: header)
+            df_export.to_excel(writer, sheet_name='Sheet1', index=False, startrow=2, header=False)
             
             workbook = writer.book
             worksheet = writer.sheets['Sheet1']
             
-            # Format cho tiêu đề (merge A1:F2)
+            # Format cho tiêu đề (CHỈ merge A1:F1, không merge dòng 2)
             title_format = workbook.add_format({
                 'bold': True,
                 'font_size': 14,
@@ -111,18 +144,21 @@ def export():
                 'font_name': 'Times New Roman'
             })
             
-            # Merge cells cho title (A1:F2)
-            worksheet.merge_range('A1:F2', 
+            # Merge cells cho title CHỈ Ở DÒNG 1 (A1:F1)
+            worksheet.merge_range('A1:F1', 
                 'DANH SÁCH ĐĂNG KÝ THAM DỰ THI THĂNG CẤP ĐAI TAEKWONDO CLB_01102', 
                 title_format)
             
-            # Set độ rộng cột
-            worksheet.set_column('A:A', 8)   # STT
-            worksheet.set_column('B:B', 15)  # Mã kỳ thi
-            worksheet.set_column('C:C', 15)  # Mã Đơn vị
-            worksheet.set_column('D:D', 15)  # Mã CLB
-            worksheet.set_column('E:E', 25)  # Mã hội viên
-            worksheet.set_column('F:F', 28)  # Cấp đăng ký dự thi
+            # Set độ rộng cột (điều chỉnh cho vừa A4)
+            worksheet.set_column('A:A', 5)   # STT - nhỏ
+            worksheet.set_column('B:B', 10)  # Mã kỳ thi - nhỏ
+            worksheet.set_column('C:C', 10)  # Mã Đơn vị - nhỏ
+            worksheet.set_column('D:D', 12)  # Mã CLB - nhỏ
+            worksheet.set_column('E:E', 22)  # Mã hội viên - quan trọng
+            worksheet.set_column('F:F', 20)  # Cấp đăng ký - quan trọng
+            
+            # Set chiều cao dòng
+            worksheet.set_row(0, 30)  # Dòng title cao hơn
             
             # Ghi header (row 3, index 2)
             headers = ['STT', 'Mã kỳ thi', 'Mã Đơn vị', 'Mã CLB', 'Mã hội viên', 'Cấp đăng ký dự thi']
@@ -135,6 +171,12 @@ def export():
                     worksheet.write(row_num + 3, col_num, 
                                   df_export.iloc[row_num, col_num], 
                                   data_format)
+            
+            # Cài đặt in - VỪA 1 TRANG A4
+            worksheet.set_paper(9)  # A4 paper
+            worksheet.fit_to_pages(1, 0)  # Vừa 1 trang ngang, tự động chiều dọc
+            worksheet.set_portrait()  # In dọc
+            worksheet.set_margins(left=0.5, right=0.5, top=0.75, bottom=0.75)
         
         output.seek(0)
         
