@@ -3,7 +3,6 @@ import pandas as pd
 from io import BytesIO
 import datetime
 import os
-import re
 
 app = Flask(__name__)
 
@@ -18,47 +17,6 @@ def index():
     except Exception as e:
         app.logger.error(f"Lỗi: {e}")
         return render_template('index.html', members=[])
-
-def get_cap_sort_key(quyen):
-    """Trả về key để sắp xếp theo cấp (9->1, sau đó các Đẳng, cuối cùng là khác)"""
-    quyen_str = str(quyen).strip()
-    
-    # Xử lý "Cấp X"
-    if quyen_str.startswith('Cấp'):
-        try:
-            cap_num = int(quyen_str.replace('Cấp', '').strip())
-            return (0, -cap_num)  # Group 0, sắp xếp giảm dần (9->1)
-        except:
-            pass
-    
-    # Xử lý "X Đẳng"
-    if 'Đẳng' in quyen_str:
-        try:
-            dang_num = int(quyen_str.replace('Đẳng', '').strip())
-            return (1, dang_num)  # Group 1, sắp xếp tăng dần (1->3)
-        except:
-            pass
-    
-    # Các trường hợp khác
-    return (2, 0)
-
-def convert_cap_to_number(quyen):
-    """Chuyển đổi 'Cấp X' thành số X-1, GIỮ NGUYÊN các trường hợp khác (GV, Đẳng)"""
-    quyen_str = str(quyen).strip()
-    
-    # CHỈ xử lý "Cấp X" (có thể có hoặc không có khoảng trắng)
-    # Ví dụ: "Cấp 9", "Cấp9", "Cấp 10", "Cấp10" -> đều xử lý
-    if 'Cấp' in quyen_str and not ('Đẳng' in quyen_str or quyen_str == 'GV'):
-        try:
-            # Loại bỏ chữ "Cấp" và khoảng trắng, lấy số
-            cap_num = int(quyen_str.replace('Cấp', '').strip())
-            return cap_num - 1  # Trừ đi 1
-        except ValueError:
-            # Nếu không parse được số, giữ nguyên
-            return quyen_str
-    
-    # GV, 1 Đẳng, 2 Đẳng, 3 Đẳng... giữ nguyên
-    return quyen_str
 
 @app.route('/export', methods=['POST'])
 def export():
@@ -82,21 +40,26 @@ def export():
         # Chuẩn bị dữ liệu
         df['Mã hội viên'] = df['Mã hội viên'].astype(str).str.strip()
         
-        # Tạo dict để lưu thông tin học viên và thứ tự chọn
         result_data = []
-        for selection_order, code in enumerate(selected):
+        for idx, code in enumerate(selected, start=1):
             code_normalized = str(code).strip()
             row = df[df['Mã hội viên'] == code_normalized]
             
             if not row.empty:
                 quyen = str(row.iloc[0]['Quyền']).strip()
                 
-                # Chuyển đổi cấp (Cấp X -> X-1)
-                cap_dang_ky = convert_cap_to_number(quyen)
+                # Tính cấp đăng ký
+                if quyen.startswith('Cấp'):
+                    try:
+                        cap_num = int(quyen.replace('Cấp', '').strip()) - 1
+                        cap_dang_ky = cap_num
+                    except:
+                        cap_dang_ky = quyen
+                else:
+                    cap_dang_ky = quyen
                 
                 result_data.append({
-                    'Quyền': quyen,  # Để sort
-                    'selection_order': selection_order,  # Thứ tự chọn
+                    'STT': idx,
                     'Mã kỳ thi': exam_code,
                     'Mã Đơn vị': 'TNIN',
                     'Mã CLB': 'CLB_01102',
@@ -107,31 +70,23 @@ def export():
         if not result_data:
             return jsonify({'error': 'Không tìm thấy học viên'}), 400
         
-        # Sắp xếp: TRƯỚC TIÊN theo cấp (9->1), SAU ĐÓ trong cùng cấp thì theo thứ tự chọn
-        result_data.sort(key=lambda x: (get_cap_sort_key(x['Quyền']), x['selection_order']))
-        
-        # Thêm STT sau khi đã sắp xếp
-        for idx, item in enumerate(result_data, start=1):
-            item['STT'] = idx
-        
-        # Tạo DataFrame với thứ tự cột đúng
+        # Tạo DataFrame
         df_export = pd.DataFrame(result_data)
-        df_export = df_export[['STT', 'Mã kỳ thi', 'Mã Đơn vị', 'Mã CLB', 'Mã hội viên', 'Cấp đăng ký dự thi']]
         
         # Xuất Excel với XlsxWriter
         output = BytesIO()
         
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            # Ghi DataFrame từ dòng 3 (dòng 1: title, dòng 2: trống, dòng 3: header)
-            df_export.to_excel(writer, sheet_name='Sheet1', index=False, startrow=2, header=False)
+            # Ghi DataFrame từ dòng 4 (để dành chỗ cho title và header)
+            df_export.to_excel(writer, sheet_name='Sheet1', index=False, startrow=3, header=False)
             
             workbook = writer.book
             worksheet = writer.sheets['Sheet1']
             
-            # Format cho tiêu đề
+            # Format cho tiêu đề (merge A1:F2)
             title_format = workbook.add_format({
                 'bold': True,
-                'font_size': 14,
+                'font_size': 12,
                 'align': 'center',
                 'valign': 'vcenter',
                 'font_name': 'Times New Roman'
@@ -140,7 +95,7 @@ def export():
             # Format cho header
             header_format = workbook.add_format({
                 'bold': True,
-                'font_size': 11,
+                'font_size': 12,
                 'align': 'center',
                 'valign': 'vcenter',
                 'border': 1,
@@ -156,22 +111,18 @@ def export():
                 'font_name': 'Times New Roman'
             })
             
-            # Merge cells cho title CHỈ Ở DÒNG 1 (A1:F1)
-            worksheet.merge_range('A1:F1', 
+            # Merge cells cho title (A1:F2)
+            worksheet.merge_range('A1:G1', 
                 'DANH SÁCH ĐĂNG KÝ THAM DỰ THI THĂNG CẤP ĐAI TAEKWONDO CLB_01102', 
                 title_format)
             
-            # Set độ rộng cột (tự động căn chỉnh cho A4 NGANG)
-            # Ưu tiên: Mã HV > Cấp đăng ký > Các Mã > STT
-            worksheet.set_column('A:A', 6)    # STT - nhỏ nhất
-            worksheet.set_column('B:B', 12)   # Mã kỳ thi
-            worksheet.set_column('C:C', 12)   # Mã Đơn vị
-            worksheet.set_column('D:D', 13)   # Mã CLB
-            worksheet.set_column('E:E', 28)   # Mã hội viên - QUAN TRỌNG NHẤT
-            worksheet.set_column('F:F', 25)   # Cấp đăng ký - QUAN TRỌNG THỨ 2
-            
-            # Set chiều cao dòng
-            worksheet.set_row(0, 30)  # Dòng title cao hơn
+            # Set độ rộng cột
+            worksheet.set_column('A:A', 8)   # STT
+            worksheet.set_column('B:B', 16)  # Mã kỳ thi
+            worksheet.set_column('C:C', 16)  # Mã Đơn vị
+            worksheet.set_column('D:D', 16)  # Mã CLB
+            worksheet.set_column('E:E', 32)  # Mã hội viên
+            worksheet.set_column('F:F', 24)  # Cấp đăng ký dự thi
             
             # Ghi header (row 3, index 2)
             headers = ['STT', 'Mã kỳ thi', 'Mã Đơn vị', 'Mã CLB', 'Mã hội viên', 'Cấp đăng ký dự thi']
@@ -184,24 +135,10 @@ def export():
                     worksheet.write(row_num + 3, col_num, 
                                   df_export.iloc[row_num, col_num], 
                                   data_format)
-            
-            # Cài đặt in - VỪA 1 TRANG A4 NGANG
-            worksheet.set_paper(9)  # A4 paper
-            worksheet.fit_to_pages(1, 0)  # Vừa 1 trang ngang, tự động chiều dọc
-            worksheet.set_landscape()  # IN NGANG (thay vì portrait)
-            worksheet.set_margins(left=0.5, right=0.5, top=0.75, bottom=0.75)
         
         output.seek(0)
         
-        # Tạo tên file theo format: "Danh sách thi quý A BCDE"
-        # Ví dụ: 2025-Q3 -> "Danh sách thi quý 3 2025"
-        match = re.match(r'(\d{4})-Q(\d)', exam_code)
-        if match:
-            year = match.group(1)  # BCDE
-            quarter = match.group(2)  # A
-            filename = f"Danh sách thi quý {quarter} {year}.xlsx"
-        else:
-            filename = f"DST_{exam_code}.xlsx"
+        filename = f"DST_{exam_code}.xlsx"
         
         return send_file(
             output,
